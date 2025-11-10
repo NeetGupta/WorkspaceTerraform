@@ -1,0 +1,49 @@
+trigger:
+  branches:
+    include:
+      - main
+
+parameters:
+  - name: environment
+    displayName: "Choose Environment"
+    type: string
+    default: "dev"
+    values:
+      - dev
+      - prod
+
+variables:
+  - name: location
+    value: 'East US'
+
+stages:
+  - stage: Terraform
+    displayName: "Terraform Deploy to $(environment)"
+    jobs:
+      - job: TerraformJob
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: AzureCLI@2
+            displayName: "Terraform Init & Apply"
+            inputs:
+              azureSubscription: '<Your-Service-Connection-Name>'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                cd terraform
+                terraform init -input=false
+
+                echo "Switching workspace: $(environment)"
+                terraform workspace select $(environment) || terraform workspace new $(environment)
+
+                echo "Running plan and apply for $(environment)"
+                terraform plan \
+                  -var="environment=$(environment)" \
+                  -var="vm_name=$(environment)-vm" \
+                  -var="storage_name=$(environment)storage123" \
+                  -out=tfplan
+
+                terraform apply -auto-approve tfplan
